@@ -1,0 +1,605 @@
+Go to Library Manager: download 'PubSubClient — Nick O’Leary' 
+
+ 
+
+Check the WiFi Connection:  
+
+ 
+
+#include <WiFi.h> 
+
+const char* WIFI_SSID = "WIFI_NAME"; 
+
+const char* WIFI_PASSWORD = "WIFI_PASSWORD"; 
+
+ 
+ 
+
+void setup() { 
+
+  Serial.begin(115200); 
+
+ 
+ 
+
+  WiFi.mode(WIFI_STA); 
+
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD); 
+
+ 
+ 
+
+  Serial.print("Connecting to Wi-Fi"); 
+
+ 
+ 
+
+  while (WiFi.status() != WL_CONNECTED) { 
+
+    delay(500); 
+
+    Serial.print("."); 
+
+  } 
+
+ 
+ 
+
+  Serial.println(); 
+
+  Serial.println("Wi-Fi connected!"); 
+
+ 
+ 
+
+  Serial.print("ESP32 IP address: "); 
+
+  Serial.println(WiFi.localIP()); 
+
+} 
+
+ 
+ 
+
+void loop() { 
+
+} 
+
+ 
+
+ 
+
+ 
+
+Check MQTT connection: 
+
+#include <WiFi.h> 
+
+#include <PubSubClient.h> 
+
+ 
+
+ 
+
+const char* WIFI_SSID = "WIFI_NAME"; 
+
+const char* WIFI_PASSWORD = "WIFI_PASSWORD"; 
+
+ 
+
+ 
+ 
+
+const char* MQTT_SERVER = "192.168.129.80"; 
+
+const int MQTT_PORT = 1883; 
+
+ 
+ 
+
+WiFiClient wifiClient; 
+
+PubSubClient mqtt(wifiClient); 
+
+ 
+ 
+
+unsigned long lastAttempt = 0; 
+
+ 
+ 
+
+void setup() { 
+
+  Serial.begin(115200); 
+
+ 
+ 
+
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD); 
+
+ 
+ 
+
+  while (WiFi.status() != WL_CONNECTED) { 
+
+    delay(500); 
+
+    Serial.print("."); 
+
+  } 
+
+ 
+ 
+
+  Serial.println("\nWi-Fi connected!"); 
+
+  mqtt.setServer(MQTT_SERVER, MQTT_PORT); 
+
+} 
+
+ 
+ 
+
+void loop() { 
+
+  if (!mqtt.connected()) { 
+
+    unsigned long now = millis(); 
+
+ 
+ 
+
+    if (now - lastAttempt >= 5000) { 
+
+      lastAttempt = now; 
+
+ 
+ 
+
+      Serial.print("Connecting to MQTT... "); 
+
+ 
+ 
+
+      if (mqtt.connect("elech423-esp32-a")) { 
+
+        Serial.println("connected!"); 
+
+ 
+ 
+
+        bool sent = mqtt.publish( 
+
+          "elech423/esp32-a/test", 
+
+          "Hello from ESP32!", 
+
+          true 
+
+        ); 
+
+ 
+ 
+
+        Serial.println(sent ? "Message sent!" : "Message failed!"); 
+
+      } else { 
+
+        Serial.print("failed, state = "); 
+
+        Serial.println(mqtt.state()); 
+
+      } 
+
+    } 
+
+  } else { 
+
+    mqtt.loop(); 
+
+  } 
+
+} 
+
+ 
+
+Control the board via server: 
+
+#include <WiFi.h> 
+
+#include <PubSubClient.h> 
+
+ 
+ 
+
+ 
+
+const char* WIFI_SSID = "WIFI_NAME"; 
+
+const char* WIFI_PASSWORD = "WIFI_PASSWORD"; 
+
+ 
+
+ 
+ 
+
+const char* MQTT_SERVER = "192.168.129.80"; 
+
+const int WHITE_LED_PIN = 33; 
+
+ 
+ 
+
+const char* COMMAND_TOPIC = "elech423/esp32-a/white/set"; 
+
+const char* STATE_TOPIC = "elech423/esp32-a/white/state"; 
+
+ 
+ 
+
+WiFiClient wifiClient; 
+
+PubSubClient mqtt(wifiClient); 
+
+ 
+ 
+
+unsigned long lastAttempt = 0; 
+
+ 
+ 
+
+// Sunucudan mesaj geldiğinde çalışır. 
+
+void onMessage(char* topic, byte* payload, unsigned int length) { 
+
+  String command; 
+
+ 
+ 
+
+  for (unsigned int i = 0; i < length; i++) { 
+
+    command += (char)payload[i]; 
+
+  } 
+
+ 
+ 
+
+  if (command == "ON") { 
+
+    digitalWrite(WHITE_LED_PIN, HIGH); 
+
+  } else if (command == "OFF") { 
+
+    digitalWrite(WHITE_LED_PIN, LOW); 
+
+  } else { 
+
+    Serial.println("Unknown command"); 
+
+    return; 
+
+  } 
+
+ 
+ 
+
+  Serial.print("White LED: "); 
+
+  Serial.println(command); 
+
+ 
+ 
+
+  // Uygulanan durumu sunucuya geri bildir. 
+
+  mqtt.publish(STATE_TOPIC, command.c_str(), true); 
+
+} 
+
+ 
+ 
+
+void setup() { 
+
+  Serial.begin(115200); 
+
+ 
+ 
+
+  pinMode(WHITE_LED_PIN, OUTPUT); 
+
+  digitalWrite(WHITE_LED_PIN, LOW); 
+
+ 
+ 
+
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD); 
+
+ 
+ 
+
+  while (WiFi.status() != WL_CONNECTED) { 
+
+    delay(500); 
+
+    Serial.print("."); 
+
+  } 
+
+ 
+ 
+
+  Serial.println("\nWi-Fi connected!"); 
+
+ 
+ 
+
+  mqtt.setServer(MQTT_SERVER, 1883); 
+
+  mqtt.setCallback(onMessage); 
+
+} 
+
+ 
+ 
+
+void loop() { 
+
+  if (!mqtt.connected()) { 
+
+    unsigned long now = millis(); 
+
+ 
+ 
+
+    if (now - lastAttempt >= 5000) { 
+
+      lastAttempt = now; 
+
+ 
+ 
+
+      if (mqtt.connect("elech423-esp32-a")) { 
+
+        Serial.println("MQTT connected!"); 
+
+ 
+ 
+
+        if (mqtt.subscribe(COMMAND_TOPIC)) { 
+
+          Serial.println("LED command subscription requested"); 
+
+        } 
+
+      } else { 
+
+        Serial.print("MQTT failed, state = "); 
+
+        Serial.println(mqtt.state()); 
+
+      } 
+
+    } 
+
+  } else { 
+
+    mqtt.loop(); // Gelen mesajları işler. 
+
+  } 
+
+} 
+
+ 
+
+ON-OFF LEDs Over Server 
+
+#include <WiFi.h> 
+
+#include <PubSubClient.h> 
+
+ 
+ 
+
+const char* WIFI_SSID = ""; 
+
+const char* WIFI_PASSWORD = ""; 
+
+ 
+ 
+
+const char* MQTT_SERVER = "192.168.129.80"; 
+
+const int WHITE_LED_PIN = 33; 
+
+ 
+ 
+
+const char* COMMAND_TOPIC = "elech423/esp32-a/white/set"; 
+
+const char* STATE_TOPIC = "elech423/esp32-a/white/state"; 
+
+ 
+ 
+
+WiFiClient wifiClient; 
+
+PubSubClient mqtt(wifiClient); 
+
+ 
+ 
+
+unsigned long lastAttempt = 0; 
+
+ 
+ 
+
+// Sunucudan mesaj geldiğinde çalışır. 
+
+void onMessage(char* topic, byte* payload, unsigned int length) { 
+
+  String command; 
+
+ 
+ 
+
+  for (unsigned int i = 0; i < length; i++) { 
+
+    command += (char)payload[i]; 
+
+  } 
+
+ 
+ 
+
+  if (command == "ON") { 
+
+    digitalWrite(WHITE_LED_PIN, HIGH); 
+
+  } else if (command == "OFF") { 
+
+    digitalWrite(WHITE_LED_PIN, LOW); 
+
+  } else { 
+
+    Serial.println("Unknown command"); 
+
+    return; 
+
+  } 
+
+ 
+ 
+
+  Serial.print("White LED: "); 
+
+  Serial.println(command); 
+
+ 
+ 
+
+  // Uygulanan durumu sunucuya geri bildir. 
+
+  mqtt.publish(STATE_TOPIC, command.c_str(), true); 
+
+} 
+
+ 
+ 
+
+void setup() { 
+
+  Serial.begin(115200); 
+
+ 
+ 
+
+  pinMode(WHITE_LED_PIN, OUTPUT); 
+
+  digitalWrite(WHITE_LED_PIN, LOW); 
+
+ 
+ 
+
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD); 
+
+ 
+ 
+
+  while (WiFi.status() != WL_CONNECTED) { 
+
+    delay(500); 
+
+    Serial.print("."); 
+
+  } 
+
+ 
+ 
+
+  Serial.println("\nWi-Fi connected!"); 
+
+ 
+ 
+
+  mqtt.setServer(MQTT_SERVER, 1883); 
+
+  mqtt.setCallback(onMessage); 
+
+} 
+
+ 
+ 
+
+void loop() { 
+
+  if (!mqtt.connected()) { 
+
+    unsigned long now = millis(); 
+
+ 
+ 
+
+    if (now - lastAttempt >= 5000) { 
+
+      lastAttempt = now; 
+
+ 
+ 
+
+      if (mqtt.connect("elech423-esp32-a")) { 
+
+        Serial.println("MQTT connected!"); 
+
+ 
+ 
+
+        if (mqtt.subscribe(COMMAND_TOPIC)) { 
+
+          Serial.println("LED command subscription requested"); 
+
+        } 
+
+      } else { 
+
+        Serial.print("MQTT failed, state = "); 
+
+        Serial.println(mqtt.state()); 
+
+      } 
+
+    } 
+
+  } else { 
+
+    mqtt.loop(); // Gelen mesajları işler. 
+
+  } 
+
+} 
+
+ 
+
+ 
+
+From terminal:  
+
+White led ON: 
+
+& "C:\Program Files\mosquitto\mosquitto_pub.exe" -h 192.168.129.80 -t "elech423/esp32-a/white/set" -m "ON" 
+
+ 
+
+White led OFF: 
+
+& "C:\Program Files\mosquitto\mosquitto_pub.exe" -h 192.168.129.80 -t "elech423/esp32-a/white/set" -m "OFF" 
+
+ 
+
+elech423/# listener of on, u see command and esp2: 
+
+- /esp32-a/white/set ON - elech423/esp32-a/white/state ON 

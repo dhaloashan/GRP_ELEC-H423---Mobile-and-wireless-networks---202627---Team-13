@@ -1,0 +1,21 @@
+#include <DHT.h>
+
+DHT dht(26, DHT11);   // sensor on pin 26
+
+void setup() {
+  Serial.begin(115200);   // start talking to the laptop
+  dht.begin();            // start the sensor
+}
+
+void loop() {
+  float temp = dht.readTemperature();
+  float hum  = dht.readHumidity();
+
+  Serial.print("Temperature: ");
+  Serial.print(temp);
+  Serial.print(" C   Humidity: ");
+  Serial.print(hum);
+  Serial.println(" %");
+
+  delay(2000);   // wait 2 seconds (the sensor is slow)
+}

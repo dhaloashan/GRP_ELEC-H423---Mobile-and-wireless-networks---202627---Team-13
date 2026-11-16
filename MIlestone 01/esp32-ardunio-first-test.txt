@@ -1,0 +1,59 @@
+#include <WiFi.h>
+#include <PubSubClient.h>
+
+const char* WIFI_SSID = "BEAMS_STUDENT";
+const char* WIFI_PASSWORD = "45c516ddea";
+const char* MQTT_SERVER = "192.168.10.111"; // Laptopun IPv4 adresi
+
+// Ikinci kart icin "esp32b" yap.
+const char* DEVICE_ID = "esp32a";
+
+WiFiClient wifiClient;
+PubSubClient mqtt(wifiClient);
+
+unsigned long lastSend = 0;
+unsigned long lastConnectAttempt = 0;
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  mqtt.setServer(MQTT_SERVER, 1883);
+}
+
+void loop() {
+  if (WiFi.status() != WL_CONNECTED) {
+    delay(10);
+    return;
+  }
+
+  if (!mqtt.connected()) {
+    if (millis() - lastConnectAttempt >= 5000) {
+      lastConnectAttempt = millis();
+      String clientId = String("elech423-") + DEVICE_ID;
+
+      if (mqtt.connect(clientId.c_str())) {
+        Serial.println("MQTT baglandi");
+      } else {
+        Serial.print("MQTT hata kodu: ");
+        Serial.println(mqtt.state());
+      }
+    }
+    return;
+  }
+
+  mqtt.loop();
+
+  if (millis() - lastSend >= 5000) {
+    lastSend = millis();
+
+    // Bunlar sensor olcumu degil, deneme degerleridir.
+    String base = String("elech423/") + DEVICE_ID;
+    mqtt.publish((base + "/temperature").c_str(), "24");
+    mqtt.publish((base + "/humidity").c_str(), "55");
+
+    Serial.println("Deneme verileri gonderildi");
+  }
+}

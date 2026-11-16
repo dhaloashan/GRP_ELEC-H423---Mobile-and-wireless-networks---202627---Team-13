@@ -1,0 +1,47 @@
+
+//READ ME
+// THIS EXTEND ZINAR'S CODE TO KEEP THE LED JUMBPING AFTER A LONG PRESS AND A SWITCH AFTER A SINGLE PRESS
+
+
+const int BUTTON_PIN = 27;
+const int RED_LED    = 32;
+const int WHITE_LED  = 33;
+
+bool blinking = false;     // are the LEDs switching on their own?
+bool redOn = true;         // which LED is on right now
+unsigned long lastSwitch = 0;
+
+void setup() {
+  pinMode(BUTTON_PIN, INPUT);
+  pinMode(RED_LED, OUTPUT);
+  pinMode(WHITE_LED, OUTPUT);
+}
+
+void loop() {
+  // 1. Check the button
+  if (digitalRead(BUTTON_PIN) == HIGH) {
+    unsigned long start = millis();
+    while (digitalRead(BUTTON_PIN) == HIGH) { }   // wait until released
+    unsigned long held = millis() - start;         // how long it was held
+    delay(50);                                     // ignore button bounce
+
+    if (blinking) {
+      blinking = false;      // any press stops the switching
+      redOn = true;
+    } else if (held > 1000) {
+      blinking = true;       // long press starts the switching
+    } else {
+      redOn = !redOn;        // short press swaps once
+    }
+  }
+
+  // 2. If switching, swap the LEDs every 300 ms
+  if (blinking && millis() - lastSwitch > 300) {
+    redOn = !redOn;
+    lastSwitch = millis();
+  }
+
+  // 3. Turn the LEDs on or off
+  digitalWrite(RED_LED,   redOn ? HIGH : LOW);
+  digitalWrite(WHITE_LED, redOn ? LOW  : HIGH);
+}

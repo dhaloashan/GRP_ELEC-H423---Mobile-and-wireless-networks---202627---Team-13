@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ELEC-H423 | Live sensor monitor</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101820;color:#edf2f7;font:16px system-ui,sans-serif}main{max-width:1150px;margin:auto;padding:36px 24px}header{display:flex;justify-content:space-between;gap:20px;align-items:center}h1{font-size:30px;margin:8px 0}h2{font-size:18px}small,.muted{color:#acbac7}#devices{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:28px 0}.device,section{background:#1b2834;border:1px solid #344555;border-radius:14px;padding:20px}.values{font-size:28px;margin:16px 0}.a{color:#58d9c4}.b{color:#ffbd69}section{margin:20px 0}canvas{width:100%;height:260px;display:block}select{background:#1b2834;color:#edf2f7;padding:9px;border:1px solid #7a8b9a;border-radius:6px}footer{color:#acbac7;font-size:14px;margin-top:20px}@media(max-width:600px){#devices{grid-template-columns:1fr}header{align-items:start;flex-direction:column}.values{font-size:24px}}
+</style>
+<main><header><div><small>ELEC-H423 / LIVE TELEMETRY</small><h1>Two devices. One view.</h1><div id="status" role="status">Connecting to dashboard…</div></div><label>Time window <select id="window"><option value="60">1 minute</option><option value="300" selected>5 minutes</option><option value="900">15 minutes</option><option value="3600">1 hour</option></select></label></header>
+<div id="devices"></div><div><span class="a">● ESP32 A — solid</span> &nbsp; <span class="b">● ESP32 B — dashed</span></div>
+<section><h2>Temperature · °C</h2><canvas id="temperature" role="img" aria-label="Temperature over time for ESP32 A and B"></canvas></section>
+<section><h2>Relative humidity · %</h2><canvas id="humidity" role="img" aria-label="Relative humidity over time for ESP32 A and B"></canvas></section>
+<footer>Live MQTT measurements · Updates every second · Up to 1,800 readings per device in memory · History clears when the dashboard program restarts.</footer></main>
+<script>
+let data={devices:{a:[],b:[]},status:'Waiting for data'};
+const colors={a:'#58d9c4',b:'#ffbd69'};
+function render(){
+ const now=Date.now()/1000,seconds=Number(document.getElementById('window').value),start=now-seconds;
+ document.getElementById('devices').innerHTML=['a','b'].map(k=>{const p=data.devices[k].at(-1),age=p?now-p.time:Infinity;return `<article class="device"><strong class="${k}">ESP32 ${k.toUpperCase()}</strong><div class="values">${p?p.temperature.toFixed(1)+' °C &nbsp; / &nbsp; '+p.humidity.toFixed(1)+' %':'— °C / — %'}</div><div class="muted">${p?(age<10?'Live':'No recent data')+' · Last received '+Math.max(0,Math.floor(age))+' seconds ago':'Waiting for first measurement'}</div></article>`}).join('');
+ for(const metric of ['temperature','humidity']){
+  const c=document.getElementById(metric),r=c.getBoundingClientRect(),dpr=devicePixelRatio||1;c.width=r.width*dpr;c.height=r.height*dpr;const ctx=c.getContext('2d');ctx.scale(dpr,dpr);const w=r.width,h=r.height,L=52,R=15,T=15,B=38;
+  const series={};for(const k of ['a','b'])series[k]=data.devices[k].filter(p=>p.time>=start);
+  const vals=Object.values(series).flat().map(p=>p[metric]);let lo=metric==='humidity'?0:(vals.length?Math.floor(Math.min(...vals)-1):15),hi=metric==='humidity'?100:(vals.length?Math.ceil(Math.max(...vals)+1):35);
+  const x=t=>L+(t-start)/seconds*(w-L-R),y=v=>h-B-(v-lo)/(hi-lo)*(h-T-B);
+  ctx.font='12px system-ui';ctx.lineWidth=1;ctx.setLineDash([]);
+  for(let i=0;i<=4;i++){const v=lo+(hi-lo)*i/4,yy=y(v);ctx.strokeStyle='#344555';ctx.beginPath();ctx.moveTo(L,yy);ctx.lineTo(w-R,yy);ctx.stroke();ctx.fillStyle='#bcc9d4';ctx.textAlign='right';ctx.fillText(v.toFixed(0),L-10,yy+4)}
+  for(let i=0;i<=3;i++){const t=start+seconds*i/3;ctx.textAlign=i===0?'left':i===3?'right':'center';ctx.fillText(new Date(t*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}),x(t),h-10)}
+  for(const k of ['a','b']){ctx.strokeStyle=colors[k];ctx.fillStyle=colors[k];ctx.lineWidth=2;ctx.setLineDash(k==='b'?[6,4]:[]);ctx.beginPath();let prev=null;for(const p of series[k]){if(!prev||p.time-prev.time>10)ctx.moveTo(x(p.time),y(p[metric]));else ctx.lineTo(x(p.time),y(p[metric]));prev=p}ctx.stroke();ctx.setLineDash([]);for(const p of series[k]){ctx.beginPath();ctx.arc(x(p.time),y(p[metric]),2,0,Math.PI*2);ctx.fill()}}
+  if(!vals.length){ctx.fillStyle='#bcc9d4';ctx.textAlign='center';ctx.fillText('Waiting for sensor readings in this time window',w/2,h/2)}
+ }
+}
+async function poll(){try{const response=await fetch('/api/data');if(!response.ok)throw Error();data=await response.json();document.getElementById('status').textContent=data.status;}catch(e){document.getElementById('status').textContent='Dashboard connection lost — check the Python window';}render();setTimeout(poll,1000)}
+document.getElementById('window').addEventListener('change',render);window.addEventListener('resize',render);poll();
+</script></html>

@@ -1,110 +1,289 @@
-# Milestone 2 — Implementation Steps
+# Milestone 2 — Running the Complete Project
 
-## 1. Prepared the two ESP32 circuits
+Run PowerShell commands from the root of the cloned Team 13 repository. Paths below match its folders. Replace network placeholders only in your local working copies.
 
-We used the same connections on both boards.
 
-| Component | GPIO |
+## 1. Install the required software
+
+Install Arduino IDE, the ESP32 board package, Python 3 and Mosquitto.
+
+In Arduino IDE, open Library Manager and install:
+
+- **PubSubClient** by Nick O’Leary
+- **DHT sensor library** by Adafruit
+- **Adafruit Unified Sensor** by Adafruit
+
+Connect both ESP32 boards and the computer to the same Wi-Fi network.
+
+## 2. Check the computer’s IP address
+
+Open PowerShell and run:
+
+```powershell
+ipconfig
+```
+
+Find **IPv4 Address** under the active Wi-Fi adapter.
+
+The commands below use this placeholder:
+
+```text
+YOUR_COMPUTER_IP
+```
+
+Replace `YOUR_COMPUTER_IP` with your computer’s current Wi-Fi IPv4 address in both ESP32 sketches, the local Mosquitto configuration and the terminal commands below.
+
+## 3. Open and configure ESP32 A’s code
+
+Use this repository sketch. Copy it into a local folder named `ESP32_A` and open `ESP32_A.ino` there in Arduino IDE:
+
+```text
+Milestone 02\Code\ESP32_A.ino
+```
+
+Change these three lines to match your network:
+
+```cpp
+const char* WIFI_SSID = "YOUR_WIFI_NAME";
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* MQTT_SERVER = "YOUR_COMPUTER_IP";
+```
+
+Check that A uses these topics:
+
+```cpp
+const char* COMMAND_TOPIC = "elech423/esp32-a/white/set";
+const char* STATE_TOPIC = "elech423/esp32-a/white/state";
+const char* SENSOR_TOPIC = "elech423/esp32-a/sensor";
+```
+
+Its MQTT connection must use A’s unique client ID:
+
+```cpp
+mqtt.connect("elech423-esp32-a")
+```
+
+A’s button-control code must publish to B’s command topic:
+
+```cpp
+mqtt.publish(
+  "elech423/esp32-b/white/set",
+  pressed ? "ON" : "OFF"
+);
+```
+
+Select **ESP32 Dev Module** and A’s COM port, then click **Upload**.
+
+## 4. Open and configure ESP32 B’s code
+
+Copy this sketch into a local folder named `ESP32_B` and open `ESP32_B.ino` there:
+
+```text
+Milestone 02\Code\ESP32_B.ino
+```
+
+Set the same Wi-Fi network and computer address:
+
+```cpp
+const char* WIFI_SSID = "YOUR_WIFI_NAME";
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* MQTT_SERVER = "YOUR_COMPUTER_IP";
+```
+
+Check B’s topics:
+
+```cpp
+const char* COMMAND_TOPIC = "elech423/esp32-b/white/set";
+const char* STATE_TOPIC = "elech423/esp32-b/white/state";
+const char* SENSOR_TOPIC = "elech423/esp32-b/sensor";
+```
+
+Its MQTT client ID must be:
+
+```cpp
+mqtt.connect("elech423-esp32-b")
+```
+
+Select B’s COM port and click **Upload**.
+
+Each board has its own COM port. Both can remain connected to the same computer.
+
+## 5. Check the Mosquitto configuration
+
+Create the local configuration from the example included in the repository:
+
+```powershell
+Copy-Item ".\Milestone 02\mosquitto-lab.conf.example" ".\Milestone 02\mosquitto-lab.conf"
+```
+
+Open the new file in a text editor:
+
+```text
+.\Milestone 02\mosquitto-lab.conf
+```
+
+It should contain:
+
+```text
+listener 1883 YOUR_COMPUTER_IP
+allow_anonymous true
+persistence false
+```
+
+| Setting | Purpose |
 |---|---|
-| DHT11 DATA | 26 |
-| Button with external pull-down | 27 |
-| Red LED | 32 |
-| White LED | 33 |
+| `listener 1883 YOUR_COMPUTER_IP` | Accept MQTT connections on TCP port 1883 at the computer’s address. |
+| `allow_anonymous true` | Allow clients to connect without a username or password. |
+| `persistence false` | Keep broker state in memory without saving it across restarts. |
 
-We first checked local button control and DHT11 readings.
+Save the file after checking the address.
 
-## 2. Connected the boards to Wi-Fi
+## 6. Start Mosquitto — Terminal 1
 
-We configured both ESP32s to use the same Wi-Fi network as the computer. A simple test printed each board’s IP address in Serial Monitor at 115200 baud.
+Open PowerShell and run:
 
-## 3. Started the MQTT broker
-
-We used Mosquitto on the computer. We checked the computer’s IPv4 address and used it in the Mosquitto listener configuration and both ESP32 sketches.
-
-The devices communicated using **MQTT over TCP port 1883**.
-
-During setup, Mosquitto initially failed because its configuration contained an old IP address. Updating the listener address resolved this.
-
-## 4. Tested MQTT communication
-
-We used the PubSubClient library to connect each ESP32 to Mosquitto.
-
-Each board had a unique client ID:
-
-```text
-elech423-esp32-a
-elech423-esp32-b
+```powershell
+& "C:\Program Files\mosquitto\mosquitto.exe" -c ".\Milestone 02\mosquitto-lab.conf" -v
 ```
 
-We confirmed the connections through Serial Monitor and Mosquitto’s connection logs.
+This command opens **`mosquitto.exe`**, using **`mosquitto-lab.conf`**.
 
-## 5. Added remote LED control
+- `&` runs the quoted program path in PowerShell.
+- `-c` selects the configuration file.
+- `-v` displays detailed connection and message logs.
 
-Each board subscribed to its own command topic:
+Wait for:
 
 ```text
-elech423/esp32-a/white/set
-elech423/esp32-b/white/set
+mosquitto version 2.1.2 running
 ```
 
-An `ON` command set GPIO33 HIGH. An `OFF` command set it LOW.
+Keep Terminal 1 open.
 
-After applying a command, the board published its output state on its `/white/state` topic. We tested this by sending commands from the computer.
+## 7. Confirm both boards are connected
 
-## 6. Published sensor measurements
+Open each board’s Serial Monitor at **115200 baud**.
 
-Both boards read the DHT11 approximately every two seconds using `millis()` scheduling.
+Press **EN/Reset** on B and then on A if necessary. Each board should print:
 
-They published temperature and humidity as JSON:
+```text
+MQTT connected!
+```
 
-```json
+Sensor readings should follow:
+
+```text
 {"temperature":24.5,"humidity":50.0}
 ```
 
-Each device used a separate sensor topic:
+Values depend on the environment. The Mosquitto log should show publications from both `elech423-esp32-a` and `elech423-esp32-b`.
 
-```text
-elech423/esp32-a/sensor
-elech423/esp32-b/sensor
+## 8. Monitor MQTT messages — Terminal 2
+
+Open another PowerShell window and run:
+
+```powershell
+& "C:\Program Files\mosquitto\mosquitto_sub.exe" -h YOUR_COMPUTER_IP -t "elech423/#" -v
 ```
 
-We checked that Mosquitto received publications from both devices.
+This opens **`mosquitto_sub.exe`**, the MQTT subscriber client.
 
-## 7. Connected A’s button to B’s white LED
+- `-h` selects the broker address.
+- `-t` selects the topic filter.
+- `elech423/#` receives all topics below `elech423/`.
+- `-v` prints the topic and payload.
 
-A continued to control its own red LED locally. We also made it publish `ON` or `OFF` to B’s command topic when its button state changed.
-
-The message followed this path:
+Expected messages include:
 
 ```text
-A’s button → ESP32 A → Mosquitto → ESP32 B → B’s white LED
+elech423/esp32-a/sensor {"temperature":26.1,"humidity":51.0}
+elech423/esp32-b/sensor {"temperature":25.8,"humidity":63.0}
 ```
 
-We tested both actions:
+Keep Terminal 2 open.
 
-- Pressing A’s button turned on A’s red LED and B’s white LED.
-- Releasing it turned both LEDs off.
+## 9. Test A’s button controlling B
 
-## 8. Checked simultaneous operation
+Press and hold A’s button.
 
-We kept both boards connected and watched their sensor publications in the broker log.
+- A’s red LED should turn on.
+- B’s white LED should turn on.
 
-B initially experienced a connection timeout. After restarting it, both devices resumed publishing regularly, and the A-to-B LED test worked.
+Release the button. Both should turn off.
 
-## 9. Added the live dashboard
+Terminal 2 should show:
 
-We ran `dashboard.py` on the computer. It subscribed to the sensor topics, stored recent readings in memory and served `dashboard.html` at `http://localhost:8080`.
+```text
+elech423/esp32-b/white/set ON
+elech423/esp32-b/white/state ON
+elech423/esp32-b/white/set OFF
+elech423/esp32-b/white/state OFF
+```
 
-We verified that the dashboard displayed both devices and updated the temperature and humidity graphs. A appeared as a solid line and B as a dashed line.
+A publishes the command, Mosquitto forwards it, and B applies it. B then reports the output state.
 
-## 10. Prepared the threat model and presentation
+## 10. Start the dashboard — Terminal 3
 
-We matched the Data Flow Diagram to the working implementation and incorporated the team’s STRIDE clarifications.
+Open another PowerShell window and run:
 
-For Milestone 3, we proposed:
+```powershell
+python ".\Milestone 02\dashboard\dashboard.py" --broker YOUR_COMPUTER_IP
+```
 
-- HMAC authentication for commands.
-- Sequence counters for replay protection.
-- AES-GCM encryption for sensor telemetry.
+This runs **`dashboard.py`**. It receives measurements through MQTT and serves the dashboard.
 
-The verified Milestone 2 demonstration consists of MQTT communication, remote LED control and live sensor charts. The security controls remain proposed work.
+The same folder must contain **`dashboard.html`**, which provides the page layout and graphs.
+
+Open:
+
+```text
+http://localhost:8080
+```
+
+Check that both ESP32 devices show recent readings. The temperature and humidity graphs should update approximately every two seconds as new measurements arrive.
+
+Keep Terminal 3 open.
+
+## 11. Control an LED from the computer — Terminal 4
+
+Open another PowerShell window.
+
+To turn **A’s white LED on**, run:
+
+```powershell
+& "C:\Program Files\mosquitto\mosquitto_pub.exe" -h YOUR_COMPUTER_IP -t "elech423/esp32-a/white/set" -m "ON"
+```
+
+To turn it **off**, run:
+
+```powershell
+& "C:\Program Files\mosquitto\mosquitto_pub.exe" -h YOUR_COMPUTER_IP -t "elech423/esp32-a/white/set" -m "OFF"
+```
+
+These commands open **`mosquitto_pub.exe`**, the MQTT publishing client.
+
+- `-t` selects A’s command topic.
+- `-m` supplies the message.
+- Write `ON` and `OFF` in uppercase.
+
+To control B’s white LED, replace `esp32-a` with `esp32-b` in the topic. A’s next button-state command may change B’s LED again.
+
+## 12. Final demonstration check
+
+| Test | Expected result |
+|---|---|
+| A and B connect | Both print `MQTT connected!`. |
+| A’s button is pressed | A’s red LED and B’s white LED turn on. |
+| A’s button is released | Both turn off. |
+| Terminal publishes ON/OFF to A | A’s white LED follows the command. |
+| MQTT monitor runs | Sensor, command and state messages appear. |
+| Dashboard runs | Both devices’ values and graphs update. |
+
+During the presentation, keep the broker, subscriber and dashboard terminals open. Demonstrate the button control and graphs beside their relevant slides.
+
+To finish, press **Ctrl+C** in each running terminal and disconnect the boards.
+## Privacy and implementation status
+
+Keep real Wi-Fi credentials and the completed local configuration out of Git. Store configured sketches in your local Arduino folders. Review screenshots before sharing so that passwords and personal file paths remain private.
+
+The current demonstration uses plaintext MQTT with anonymous broker access. HMAC command authentication, replay counters and AES-GCM telemetry encryption remain proposed Milestone 3 controls.
